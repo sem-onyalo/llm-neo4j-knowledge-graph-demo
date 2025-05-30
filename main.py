@@ -12,40 +12,30 @@ from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_neo4j import Neo4jGraph
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 
-llm = AzureChatOpenAI(
-    azure_deployment=os.getenv('AZURE_OPENAI_MODEL_DEPLOYMENT_NAME'),
-)
+LOAD_CMD = "load"
 
-embedding_provider = AzureOpenAIEmbeddings(
-    azure_deployment=os.getenv('AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME'),
-)
+class RuntimeArgs:
+    action:str
+    path:str
 
-graph = Neo4jGraph(
-    url=os.getenv('NEO4J_URI'),
-    username=os.getenv('NEO4J_USERNAME'),
-    password=os.getenv('NEO4J_PASSWORD')
-)
-
-doc_transformer = LLMGraphTransformer(
-    llm=llm,
-    node_properties=["name", "description"],
-)
-
-def init_logger(level:str) -> logging.Logger:
+def init_logger(level:int) -> logging.Logger:
     logging.basicConfig(
         format="[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
         datefmt="%Y/%m/%d %H:%M:%S",
-        level=logging.INFO # TODO: use level
+        level=level,
     )
 
     return logging.getLogger("llm-neo4j-kg-demo")
 
-def get_runtime_args():
+def get_runtime_args() -> RuntimeArgs:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-l", "--log-level", type=str, default="INFO", help="The logging level to use.")
+    parser.add_argument("-l", "--log-level", type=int, default=20, help="The logging level to use.")
+
     subparser_action = parser.add_subparsers(dest="action")
-    load_parser = subparser_action.add_parser("load", help="Load PDF document in graph database.")
+
+    load_parser = subparser_action.add_parser(LOAD_CMD, help="Load PDF document in graph database.")
     load_parser.add_argument("--path", default=None, help="Path to PDF file.")
+
     return parser.parse_args()
 
 def chunk_file(path:str) -> List[Document]:
@@ -63,7 +53,13 @@ def chunk_file(path:str) -> List[Document]:
 
     return chunks
 
-def create_graph_documents(chunks:List[Document], logger:logging.Logger) -> List[GraphDocument]:
+def create_graph_documents(
+        chunks:List[Document],
+        graph:Neo4jGraph,
+        embedding_provider:AzureOpenAIEmbeddings,
+        doc_transformer:LLMGraphTransformer,
+        logger:logging.Logger) -> List[GraphDocument]:
+
     graph_docs = []
 
     for chunk in chunks:
@@ -107,20 +103,22 @@ def create_graph_documents(chunks:List[Document], logger:logging.Logger) -> List
 
     return graph_docs
 
-def main():
-    load_dotenv()
+def load_document(
+        path:str,
+        graph:Neo4jGraph,
+        embedding_provider:AzureOpenAIEmbeddings,
+        doc_transformer:LLMGraphTransformer,
+        logger:logging.Logger) -> None:
 
-    args = get_runtime_args()
+    assert path and os.path.isfile(path), f"Invalid file path: {path}"
 
-    logger = init_logger(args.log_level)
+    logger.info(f"Loading: {path}")
 
-    assert os.path.isfile(args.path), f"Cannot find the file {args.path}"
-
-    chunks = chunk_file(args.path)
+    chunks = chunk_file(path)
 
     logger.info(f"Number of chunks: {len(chunks)}")
 
-    graph_docs = create_graph_documents(chunks, logger)
+    graph_docs = create_graph_documents(chunks, graph, embedding_provider, doc_transformer, logger)
 
     logger.info(f"Number of graph documents: {len(graph_docs)}")
 
@@ -134,6 +132,41 @@ def main():
         `vector.dimensions`: 1536,
         `vector.similarity_function`: 'cosine'
         }};""")
+
+def main():
+    load_dotenv()
+
+    args = get_runtime_args()
+
+    logger = init_logger(int(args.log_level))
+
+    logger.info("-" * 50)
+    logger.info("Neo4j Knowledge Graph Demo")
+    logger.info("-" * 50)
+
+    llm = AzureChatOpenAI(
+        azure_deployment=os.getenv('AZURE_OPENAI_MODEL_DEPLOYMENT_NAME'),
+    )
+
+    embedding_provider = AzureOpenAIEmbeddings(
+        azure_deployment=os.getenv('AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME'),
+    )
+
+    graph = Neo4jGraph(
+        url=os.getenv('NEO4J_URI'),
+        username=os.getenv('NEO4J_USERNAME'),
+        password=os.getenv('NEO4J_PASSWORD'),
+    )
+
+    doc_transformer = LLMGraphTransformer(
+        llm=llm,
+        node_properties=["name", "description"],
+    )
+
+    if args.action and args.action == LOAD_CMD:
+        load_document(args.path, graph, embedding_provider, doc_transformer, logger)
+
+    logger.info("Done!")
 
 if __name__ == "__main__":
     main()
