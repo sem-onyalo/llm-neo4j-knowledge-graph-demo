@@ -7,16 +7,20 @@ from dotenv import load_dotenv
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders.blob_loaders import Blob
 from langchain_community.graphs.graph_document import GraphDocument, Node, Relationship
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_neo4j import Neo4jGraph
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 
-LOAD_CMD = "load"
+CMD_EXPLORE = "explore"
+CMD_LOAD = "load"
 
 class RuntimeArgs:
     action:str
+    log_level:int
     path:str
+    slice:str
 
 def init_logger(level:int) -> logging.Logger:
     logging.basicConfig(
@@ -31,14 +35,35 @@ def get_runtime_args() -> RuntimeArgs:
     parser = argparse.ArgumentParser()
     parser.add_argument("-l", "--log-level", type=int, default=20, help="The logging level to use.")
 
-    subparser_action = parser.add_subparsers(dest="action")
+    action_subparser = parser.add_subparsers(dest="action")
 
-    load_parser = subparser_action.add_parser(LOAD_CMD, help="Load PDF document in graph database.")
-    load_parser.add_argument("--path", default=None, help="Path to PDF file.")
+    load_parser = action_subparser.add_parser(CMD_LOAD, help="Load PDF document in graph database.")
+    load_parser.add_argument("-s", "--slice", default=None, help="Which chunk slice to include (format: start:end).")
+    load_parser.add_argument("-p", "--path", default=None, help="Path to PDF file.")
+
+    explore_parser = action_subparser.add_parser(CMD_EXPLORE, help="Explore PDF document.")
+    explore_parser.add_argument("-s", "--slice", default=None, help="Which chunk slice to include (format: start:end).")
+    explore_parser.add_argument("-p", "--path", default=None, help="Path to PDF file.")
 
     return parser.parse_args()
 
-def chunk_file(path:str) -> List[Document]:
+def is_integer(n):
+    try:
+        float(n)
+    except ValueError:
+        return False
+    else:
+        return float(n).is_integer()
+
+def chunk_file(path:str, slice:str, logger:logging.Logger) -> List[Document]:
+    assert path and os.path.isfile(path), f"Invalid file path: {path}"
+
+    if slice:
+        slice_parts = slice.split(":")
+        assert len(slice_parts) == 2 and is_integer(slice_parts[0]) and is_integer(slice_parts[1]), f"Invalid slice: {slice}"
+
+    logger.info(f"Chunking {path}")
+
     loader = PyPDFLoader(file_path=path)
 
     text_splitter = CharacterTextSplitter(
@@ -51,6 +76,10 @@ def chunk_file(path:str) -> List[Document]:
 
     chunks = text_splitter.split_documents(docs)
 
+    if slice:
+        logger.info("Slicing chunks")
+        chunks = chunks[int(slice_parts[0]):int(slice_parts[1])]
+
     return chunks
 
 def create_graph_documents(
@@ -58,8 +87,8 @@ def create_graph_documents(
         graph:Neo4jGraph,
         embedding_provider:AzureOpenAIEmbeddings,
         doc_transformer:LLMGraphTransformer,
-        logger:logging.Logger) -> List[GraphDocument]:
-
+        logger:logging.Logger
+    ) -> List[GraphDocument]:
     graph_docs = []
 
     for chunk in chunks:
@@ -105,16 +134,17 @@ def create_graph_documents(
 
 def load_document(
         path:str,
+        slice:str,
         graph:Neo4jGraph,
         embedding_provider:AzureOpenAIEmbeddings,
         doc_transformer:LLMGraphTransformer,
-        logger:logging.Logger) -> None:
-
+        logger:logging.Logger
+    ) -> None:
     assert path and os.path.isfile(path), f"Invalid file path: {path}"
 
-    logger.info(f"Loading: {path}")
+    logger.info(f"Loading {path}")
 
-    chunks = chunk_file(path)
+    chunks = chunk_file(path, slice, logger)
 
     logger.info(f"Number of chunks: {len(chunks)}")
 
@@ -132,6 +162,23 @@ def load_document(
         `vector.dimensions`: 1536,
         `vector.similarity_function`: 'cosine'
         }};""")
+    
+def explore_document(path:str, slice:str, logger:logging.Logger) -> None:
+    chunks = chunk_file(path, slice, logger)
+
+    logger.info(f"Number of chunks: {len(chunks)}")
+    logger.info("Enter chunk number to explore it. Type 'exit' to exit.")
+
+    while (page_num := input("> ")) != "exit":
+        if page_num == "":
+            continue
+        elif not is_integer(page_num):
+            print("Not a page number")
+        elif int(page_num) < 0 or int(page_num) >= len(chunks):
+            print("Page number out of range")
+        else:
+            content = chunks[int(page_num)].page_content
+            print(str(content.encode("utf-8")))
 
 def main():
     load_dotenv()
@@ -163,8 +210,10 @@ def main():
         node_properties=["name", "description"],
     )
 
-    if args.action and args.action == LOAD_CMD:
-        load_document(args.path, graph, embedding_provider, doc_transformer, logger)
+    if args.action and args.action == CMD_LOAD:
+        load_document(args.path, args.slice, graph, embedding_provider, doc_transformer, logger)
+    elif args.action and args.action == CMD_EXPLORE:
+        explore_document(args.path, args.slice, logger)
 
     logger.info("Done!")
 

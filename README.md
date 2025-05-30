@@ -2,7 +2,24 @@
 
 A demo showcasing the creation of a knowledge graph to use as a GraphRAG setup.
 
-## Environment Variables
+## Prerequisites
+
+* Python >= 3.10
+* Neo4j >= 5.26
+* Azure OpenAI chat model deployment
+* Azure OpenAI embedding model deployment
+
+## Setup
+
+### Install
+
+```bash
+python -m venv venv
+source venv/bin/activate # or source venv/Scripts/activate on Windows
+pip install -r requirements.txt
+```
+
+### Environment Variables
 
 Environment variables are read from a `.env` file.
 
@@ -17,8 +34,14 @@ Environment variables are read from a `.env` file.
 | NEO4J_USERNAME | Yes |
 | OPENAI_API_VERSION | Yes |
 
+## Explore PDF Document
+
+```bash
+python -m main explore --path <path-to-pdf-file> --slice <start_slice:end_slice>
+```
+
 ## Load PDF Document
 
-```
-python -m main load --path <path-to-pdf-file>
+```bash
+python -m main load --path <path-to-pdf-file> --slice <start_slice:end_slice>
 ```
