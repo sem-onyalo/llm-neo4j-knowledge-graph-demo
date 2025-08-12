@@ -19,6 +19,7 @@ def get_runtime_args() -> RuntimeArgs:
     parser = argparse.ArgumentParser()
     parser.add_argument("-l", "--log-level", type=int, default=20, help="The logging level to use.")
     parser.add_argument("-t", "--template-path", type=str, default="templates", help="Path to the templates.")
+    parser.add_argument("--ignore-graph", action="store_false", help="Do not use the knowledge graph.")
 
     action_subparser = parser.add_subparsers(dest="action")
 

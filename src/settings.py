@@ -8,6 +8,7 @@ TEMPLATE_CHUNK_RETRIEVAL_QUERY = "chunk_retrieval_query.cypher"
 
 class RuntimeArgs:
     action:str
+    ignore_graph:bool
     log_level:int
     path:str
     slice:str
