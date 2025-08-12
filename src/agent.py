@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import uuid4
 
 from jinja2 import Environment
@@ -21,7 +22,8 @@ class Agent:
             template_env:Environment,
             llm:BaseChatModel,
             graph:Neo4jGraph,
-            vector_retriever:VectorRetriever
+            vector_retriever:VectorRetriever,
+            use_graph:Optional[bool]=True,
         ) -> None:
 
         self.new_session_id()
@@ -40,13 +42,17 @@ class Agent:
                 name="General Chat",
                 description="For general chat not covered by other tools",
                 func=general_chat.invoke,
-            ), 
-            Tool.from_function(
-                name="Textbook content search",
-                description="For when you need to find information in the textbook content",
-                func=vector_retriever.query, 
             ),
         ]
+
+        if use_graph:
+            tools.append(
+                Tool.from_function(
+                    name="Textbook content search",
+                    description="For when you need to find information in the textbook content",
+                    func=vector_retriever.query, 
+                )
+            )
 
         agent_prompt = PromptTemplate.from_template(template_env.get_template(TEMPLATE_AGENT_PROMPT).render())
 

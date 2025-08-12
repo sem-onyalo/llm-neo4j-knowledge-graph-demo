@@ -60,6 +60,7 @@ def main():
     logger.info("-" * 50)
     logger.info("Neo4j GraphRAG Demo")
     logger.info("-" * 50)
+    logger.info(f"Use graph: {args.ignore_graph}")
 
     llm = AzureChatOpenAI(
         azure_deployment=os.getenv("AZURE_OPENAI_MODEL_DEPLOYMENT_NAME"),
@@ -86,7 +87,7 @@ def main():
 
     vector_retriever = VectorRetriever(template_env, llm, graph, embedding_provider)
 
-    agent = Agent(template_env, llm, graph, vector_retriever)
+    agent = Agent(template_env, llm, graph, vector_retriever, args.ignore_graph)
 
     if args.action and args.action == CMD_LOAD:
         vector_loader.load(args.path, args.slice)
