@@ -13,27 +13,32 @@ from settings import (
     TEMPLATE_CHUNK_RETRIEVAL_QUERY,
 )
 
+
 class VectorRetriever:
     def __init__(
-            self,
-            template_env:Environment,
-            llm:BaseChatModel,
-            graph:Neo4jGraph,
-            embedding_provider:AzureOpenAIEmbeddings
-        ) -> None:
-
+        self,
+        template_env: Environment,
+        llm: BaseChatModel,
+        graph: Neo4jGraph,
+        embedding_provider: AzureOpenAIEmbeddings,
+    ) -> None:
         chunk_vector = Neo4jVector.from_existing_index(
             embedding_provider,
             graph=graph,
             index_name="chunkVector",
             embedding_node_property="textEmbedding",
             text_node_property="text",
-            retrieval_query=template_env.get_template(TEMPLATE_CHUNK_RETRIEVAL_QUERY).render(),
+            retrieval_query=template_env.get_template(
+                TEMPLATE_CHUNK_RETRIEVAL_QUERY
+            ).render(),
         )
 
         prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", template_env.get_template(TEMPLATE_CHUNK_RETRIEVAL_PROMPT).render()),
+                (
+                    "system",
+                    template_env.get_template(TEMPLATE_CHUNK_RETRIEVAL_PROMPT).render(),
+                ),
                 ("human", "{input}"),
             ]
         )
@@ -44,5 +49,5 @@ class VectorRetriever:
 
         self.retrieval_chain = create_retrieval_chain(chunk_retriever, chunk_chain)
 
-    def query(self, input:str) -> Dict[str,Any]:
-        return self.retrieval_chain.invoke({ "input": input })
+    def query(self, input: str) -> Dict[str, Any]:
+        return self.retrieval_chain.invoke({"input": input})

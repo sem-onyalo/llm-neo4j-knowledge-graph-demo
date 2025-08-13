@@ -16,21 +16,24 @@ from settings import (
 )
 from vector_retriever import VectorRetriever
 
+
 class Agent:
     def __init__(
-            self,
-            template_env:Environment,
-            llm:BaseChatModel,
-            graph:Neo4jGraph,
-            vector_retriever:VectorRetriever,
-            use_graph:Optional[bool]=True,
-        ) -> None:
-
+        self,
+        template_env: Environment,
+        llm: BaseChatModel,
+        graph: Neo4jGraph,
+        vector_retriever: VectorRetriever,
+        use_graph: Optional[bool] = True,
+    ) -> None:
         self.new_session_id()
 
         chat_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", template_env.get_template(TEMPLATE_AGENT_SYSTEM_PROMPT).render()),
+                (
+                    "system",
+                    template_env.get_template(TEMPLATE_AGENT_SYSTEM_PROMPT).render(),
+                ),
                 ("human", "{input}"),
             ]
         )
@@ -50,11 +53,13 @@ class Agent:
                 Tool.from_function(
                     name="Textbook content search",
                     description="For when you need to find information in the textbook content",
-                    func=vector_retriever.query, 
+                    func=vector_retriever.query,
                 )
             )
 
-        agent_prompt = PromptTemplate.from_template(template_env.get_template(TEMPLATE_AGENT_PROMPT).render())
+        agent_prompt = PromptTemplate.from_template(
+            template_env.get_template(TEMPLATE_AGENT_PROMPT).render()
+        )
 
         agent = create_react_agent(llm, tools, agent_prompt)
 
@@ -74,13 +79,13 @@ class Agent:
             history_messages_key="chat_history",
         )
 
-    def query(self, input:str) -> str:
+    def query(self, input: str) -> str:
         response = self.agent.invoke(
-            { "input": input },
-            { "configurable": { "session_id": self.session_id } },
+            {"input": input},
+            {"configurable": {"session_id": self.session_id}},
         )
 
-        return response['output']
+        return response["output"]
 
     def get_memory(self) -> Neo4jChatMessageHistory:
         return Neo4jChatMessageHistory(session_id=self.session_id, graph=self.graph)
