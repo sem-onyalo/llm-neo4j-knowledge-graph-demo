@@ -11,25 +11,23 @@ from langchain_openai import AzureOpenAIEmbeddings
 
 from utils import is_integer
 
+
 class VectorLoader:
     def __init__(
-            self,
-            graph:Neo4jGraph,
-            embedding_provider:AzureOpenAIEmbeddings,
-            document_transformer:LLMGraphTransformer,
-        ):
+        self,
+        graph: Neo4jGraph,
+        embedding_provider: AzureOpenAIEmbeddings,
+        document_transformer: LLMGraphTransformer,
+    ):
         self.graph = graph
         self.embedding_provider = embedding_provider
         self.document_transformer = document_transformer
 
-    def load(self, path:str, slice:str) -> None:
+    def load(self, path: str, slice: str) -> None:
         chunks = self.chunk_file(path, slice)
 
         graph_docs = self.create_graph_documents(
-            chunks,
-            self.graph,
-            self.embedding_provider,
-            self.document_transformer
+            chunks, self.graph, self.embedding_provider, self.document_transformer
         )
 
         self.graph.add_graph_documents(graph_docs)
@@ -43,14 +41,17 @@ class VectorLoader:
             `vector.similarity_function`: 'cosine'
             }};""")
 
-    def chunk_file(self, path:str, slice:str) -> List[Document]:
+    def chunk_file(self, path: str, slice: str) -> List[Document]:
         assert path and os.path.isfile(path), f"Invalid file path: {path}"
 
         if slice:
             slice_parts = slice.split(":")
-            assert (
-                len(slice_parts) == 2 and is_integer(slice_parts[0]) and is_integer(slice_parts[1]), 
-                f"Invalid slice: {slice}"
+            assert len(slice_parts) == 2, f"Invalid slice: {slice}"
+
+            chunk_start = slice_parts[0]
+            chunk_end = slice_parts[1]
+            assert is_integer(chunk_start) and is_integer(chunk_end), (
+                "Slice values should be integers"
             )
 
         loader = PyPDFLoader(file_path=path)
@@ -66,11 +67,11 @@ class VectorLoader:
         chunks = text_splitter.split_documents(docs)
 
         if slice:
-            chunks = chunks[int(slice_parts[0]):int(slice_parts[1])]
+            chunks = chunks[int(chunk_start) : int(chunk_end)]
 
         return chunks
 
-    def create_graph_documents(self, chunks:List[Document]) -> List[GraphDocument]:
+    def create_graph_documents(self, chunks: List[Document]) -> List[GraphDocument]:
         graph_docs = []
 
         for chunk in chunks:
@@ -83,22 +84,25 @@ class VectorLoader:
                 "filename": filename,
                 "chunk_id": chunk_id,
                 "text": chunk.page_content,
-                "embedding": chunk_embedding
+                "embedding": chunk_embedding,
             }
 
-            self.graph.query("""
+            self.graph.query(
+                """
                 MERGE (d:Document {id: $filename})
                 MERGE (c:Chunk {id: $chunk_id})
                 SET c.text = $text
                 MERGE (d)<-[:PART_OF]-(c)
                 WITH c
                 CALL db.create.setNodeVectorProperty(c, 'textEmbedding', $embedding)
-                """, 
-                properties
+                """,
+                properties,
             )
 
             # Generate the entities and relationships from the chunk
-            chunk_graph_docs = self.document_transformer.convert_to_graph_documents([chunk])
+            chunk_graph_docs = self.document_transformer.convert_to_graph_documents(
+                [chunk]
+            )
 
             # Map the entities in the graph documents to the chunk node
             for graph_doc in chunk_graph_docs:

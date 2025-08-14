@@ -11,12 +11,22 @@ A demo showcasing the creation of a knowledge graph to use as a GraphRAG setup.
 
 ## Setup
 
-1. Create the virtual environment and install the required libraries.
-
+1. Clone repository
     ```bash
-    python -m venv venv
-    source venv/bin/activate # or source venv/Scripts/activate on Windows
-    pip install -r requirements.txt
+    git clone https://github.com/sem-onyalo/llm-neo4j-knowledge-graph-demo.git
+    cd llm-neo4j-knowledge-graph-demo
+    ```
+
+1. Install uv
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+
+1. Setup environment
+    ```bash
+    pip install pre-commit
+    pre-commit install
+    uv sync
     ```
 
 1. Create a `.env` file and add the environment variables listed below.
@@ -42,16 +52,22 @@ A demo showcasing the creation of a knowledge graph to use as a GraphRAG setup.
 ## Explore PDF Document
 
 ```bash
-python src/main.py explore --path <path-to-pdf-file> --slice <start_slice:end_slice>
+uv run src/main.py explore --path <path-to-pdf-file> --slice <start_slice:end_slice>
 ```
 
 ## Load PDF Document
 
 ```bash
-python src/main.py load --path <path-to-pdf-file> --slice <start_slice:end_slice>
+uv run src/main.py load --path <path-to-pdf-file> --slice <start_slice:end_slice>
 ```
 
 ## Chat
 ```bash
-python src/main.py chat
+uv run src/main.py chat
+```
+
+## Pre-Commit checks
+```bash
+uvx ruff check
+uvx ruff formt
 ```

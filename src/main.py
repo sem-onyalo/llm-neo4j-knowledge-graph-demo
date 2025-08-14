@@ -21,7 +21,10 @@ from utils import (
 from vector_loader import VectorLoader
 from vector_retriever import VectorRetriever
 
-def explore_document(path:str, slice:str, vector_loader:VectorLoader, logger:logging.Logger) -> None:
+
+def explore_document(
+    path: str, slice: str, vector_loader: VectorLoader, logger: logging.Logger
+) -> None:
     chunks = vector_loader.chunk_file(path, slice)
 
     logger.info(f"Number of chunks: {len(chunks)}")
@@ -39,7 +42,8 @@ def explore_document(path:str, slice:str, vector_loader:VectorLoader, logger:log
             content = chunks[int(page_num)].page_content
             print(str(content.encode("utf-8")))
 
-def chat(agent:Agent, logger:logging.Logger) -> None:
+
+def chat(agent: Agent, logger: logging.Logger) -> None:
     logger.info("Enter query below. Type 'exit' to exit.")
 
     while (query := input("> ")) != "exit":
@@ -47,6 +51,7 @@ def chat(agent:Agent, logger:logging.Logger) -> None:
             continue
         else:
             print(agent.query(query))
+
 
 def main():
     load_dotenv()
@@ -97,6 +102,7 @@ def main():
         chat(agent, logger)
 
     logger.info("Done!")
+
 
 if __name__ == "__main__":
     main()
