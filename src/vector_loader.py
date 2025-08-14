@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import List
 
 from langchain.text_splitter import CharacterTextSplitter
@@ -19,16 +20,32 @@ class VectorLoader:
         embedding_provider: AzureOpenAIEmbeddings,
         document_transformer: LLMGraphTransformer,
     ):
+        self.logger = logging.getLogger(__name__)
+
         self.graph = graph
         self.embedding_provider = embedding_provider
         self.document_transformer = document_transformer
 
-    def load(self, path: str, slice: str) -> None:
-        chunks = self.chunk_file(path, slice)
+        self.docs_parts = None
 
-        graph_docs = self.create_graph_documents(
-            chunks, self.graph, self.embedding_provider, self.document_transformer
-        )
+    def import_doc(self, path: str) -> None:
+        assert path and os.path.isfile(path), f"Invalid file path: {path}"
+
+        self.logger.info("creating loader")
+
+        loader = PyPDFLoader(file_path=path)
+
+        self.logger.info("importing doc")
+
+        self.docs_parts = loader.load()
+
+    def load(self, path: str, slice: str) -> None:
+        if not self.docs_parts:
+            self.import_doc(path)
+
+        chunks = self.chunk(path, slice)
+
+        graph_docs = self.create_graph_documents(chunks)
 
         self.graph.add_graph_documents(graph_docs)
 
@@ -41,35 +58,38 @@ class VectorLoader:
             `vector.similarity_function`: 'cosine'
             }};""")
 
-    def chunk_file(self, path: str, slice: str) -> List[Document]:
-        assert path and os.path.isfile(path), f"Invalid file path: {path}"
+    def chunk(self, path: str, slice: str) -> List[Document]:
+        if not self.docs_parts:
+            self.import_doc(path)
 
-        if slice:
-            slice_parts = slice.split(":")
-            assert len(slice_parts) == 2, f"Invalid slice: {slice}"
-
-            chunk_start = slice_parts[0]
-            chunk_end = slice_parts[1]
-            assert is_integer(chunk_start) and is_integer(chunk_end), (
-                "Slice values should be integers"
-            )
-
-        loader = PyPDFLoader(file_path=path)
-
+        self.logger.info("creating splitter")
         text_splitter = CharacterTextSplitter(
             separator="\n\n",
             chunk_size=1500,
             chunk_overlap=200,
         )
 
-        docs = loader.load()
+        self.logger.info("chunking doc")
+        self.chunks = text_splitter.split_documents(self.docs_parts)
 
-        chunks = text_splitter.split_documents(docs)
+        return self.slice(slice) if slice else self.chunks
 
-        if slice:
-            chunks = chunks[int(chunk_start) : int(chunk_end)]
+    def slice(self, slice: str) -> List[Document]:
+        self.logger.info("slicing chunks")
 
-        return chunks
+        slice_parts = slice.split(":")
+        assert len(slice_parts) == 2, f"Invalid slice: {slice}"
+
+        chunk_start = slice_parts[0].strip()
+        chunk_end = slice_parts[1].strip()
+        assert is_integer(chunk_start) and is_integer(chunk_end), (
+            "Slice values should be integers"
+        )
+
+        return self.chunks[int(chunk_start) : int(chunk_end)]
+
+    def chunks_len(self) -> int:
+        return len(self.chunks)
 
     def create_graph_documents(self, chunks: List[Document]) -> List[GraphDocument]:
         graph_docs = []
