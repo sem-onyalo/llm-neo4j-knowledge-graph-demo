@@ -21,26 +21,49 @@ from utils import (
 from vector_loader import VectorLoader
 from vector_retriever import VectorRetriever
 
+EXPLORE_INSTRUCTIONS = """
+Enter:
+    * <chunk_number> to explore a chunk (0th index)
+    * 'chunks-len' for total available chunks
+    * 'slice <start_slice:end_slice>' to (re-)slice
+    * 'load <start_slice:end_slice>' to load chunks
+    * 'exit' to exit"""
+
 
 def explore_document(
     path: str, slice: str, vector_loader: VectorLoader, logger: logging.Logger
 ) -> None:
-    chunks = vector_loader.chunk_file(path, slice)
+    chunks = vector_loader.chunk(path, slice)
 
     logger.info(f"Number of chunks: {len(chunks)}")
 
-    logger.info("Enter chunk number to explore it. Type 'exit' to exit.")
+    logger.info(EXPLORE_INSTRUCTIONS)
 
-    while (page_num := input("> ")) != "exit":
-        if page_num == "":
-            continue
-        elif not is_integer(page_num):
-            print("Not a page number")
-        elif int(page_num) < 0 or int(page_num) >= len(chunks):
-            print("Page number out of range")
-        else:
-            content = chunks[int(page_num)].page_content
-            print(str(content.encode("utf-8")))
+    while (cmd := input("> ")) != "exit":
+        try:
+            if cmd == "":
+                continue
+            elif cmd.startswith("slice "):
+                slice = cmd.replace("slice ", "")
+                chunks = vector_loader.slice(slice)
+                logger.info(f"Number of chunks: {len(chunks)}")
+            elif cmd.startswith("chunks-len"):
+                logger.info(f"Number of total chunks: {vector_loader.chunks_len()}")
+            elif cmd.startswith("load "):
+                slice = cmd.replace("load ", "")
+                vector_loader.load(path, slice)
+                logger.info("loaded!")
+            elif not is_integer(cmd):
+                print("Not a page number")
+            elif int(cmd) < 0 or int(cmd) >= len(chunks):
+                print("Chunk number out of range")
+            else:
+                content = chunks[int(cmd)].page_content
+                print(str(content.encode("utf-8")))
+        except KeyboardInterrupt:
+            break
+        except Exception as ex:
+            print(f"error: {ex}")
 
 
 def chat(agent: Agent, logger: logging.Logger) -> None:
